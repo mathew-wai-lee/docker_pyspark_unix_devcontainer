@@ -1,9 +1,9 @@
 FROM python:3.10 as compile-image
 
 ### Set Pyspark Python Paths so that Driver and Executor are consistent
-ENV PYTHONPATH=/usr/bin/python3.7
-ENV PYSPARK_PYTHON=/usr/bin/python3.7
-ENV PYSPARK_DRIVER_PYTHON=/usr/bin/python3.7
+ENV PYTHONPATH=/usr/bin/python3.10
+ENV PYSPARK_PYTHON=/usr/bin/python3.10
+ENV PYSPARK_DRIVER_PYTHON=/usr/bin/python3.10
 
 ### Setup a virtual env for python isolation and smaller image sizes on multi-stage builds.
 ### Allows us to easily copy over the files in one bundle from compile container to build.
@@ -18,7 +18,7 @@ COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 ### Install Jupyter and extensions
-RUN python -m pip install --no-cache-dir jupyterlab jupyter_contrib_nbextensions jupyter_nbextensions_configurator
+RUN python -m pip install --no-cache-dir pyspark jupyterlab 
 
 ########################################################################################
 ### Change to the slim image to save on space - ONLY RECOMMENDED FOR STANDALONE PY APPS, according to Python Docker Repo.
@@ -30,11 +30,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 ### Need to make this directory for openjdk to install properly
 RUN mkdir -p /usr/share/man/man1
 
-### Install next round of linux dependencies that will need to persist in this stage. These are for MS SQL Server connection.
-RUN apt-get update && apt-get install -y --no-install-recommends libaio1 openjdk-11-jre-headless openjdk-11-jdk-headless ca-certificates-java wget python3-launchpadlib software-properties-common \
-    && add-apt-repository ppa:openjdk-r/ppa \
-    && rm -rf /var/lib/apt/lists/*
-
 # Fix DL4006
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -43,10 +38,10 @@ USER root
 # Spark dependencies
 # Default values can be overridden at build time
 # (ARGS are in lower case to distinguish them from ENV)
-ARG spark_version="3.4.1"
+ARG spark_version="3.5.1"
 ARG hadoop_version="3"
-ARG spark_checksum="5a21295b4c3d1d3f8fc85375c711c7c23e3eeb3ec9ea91778f149d8d321e3905e2f44cf19c69a28df693cffd536f7316706c78932e7e148d224424150f18b2c5"
-ARG openjdk_version="18"
+ARG spark_checksum="3d8e3f082c602027d540771e9eba9987f8ea955e978afc29e1349eb6e3f9fe32543e3d3de52dff048ebbd789730454c96447c86ff5b60a98d72620a0f082b355"
+ARG openjdk_version="17"
 
 ENV APACHE_SPARK_VERSION="${spark_version}" \
     HADOOP_VERSION="${hadoop_version}"
@@ -83,7 +78,7 @@ RUN cp -p "${SPARK_HOME}/conf/spark-defaults.conf.template" "${SPARK_HOME}/conf/
     echo 'spark.executor.extraJavaOptions -Dio.netty.tryReflectionSetAccessible=true' >> "${SPARK_HOME}/conf/spark-defaults.conf"
 
 ### Copy in a conf file to point to the right drivers (oracle thin jdbc driver outlined here)
-COPY spark-defaults.conf ${SPARK_HOME}/conf/spark-defaults.conf
+# COPY spark-defaults.conf ${SPARK_HOME}/conf/spark-defaults.conf
 
 WORKDIR /home/
 
@@ -91,25 +86,10 @@ WORKDIR /home/
 COPY --from=compile-image /opt/venv /opt/venv
 
 ### Change style of pyspark dataframes to pretty print
-COPY style.min.css /opt/venv/lib/python3.7/site-packages/notebook/static/style/style.min.css
-
-### Install Jupyter extensions and enable them
-RUN jupyter contrib nbextension install --user
-RUN jupyter nbextensions_configurator enable --user
-
-### Install Julia
-RUN wget https://julialang-s3.julialang.org/bin/linux/x64/1.7/julia-1.7.0-linux-x86_64.tar.gz
-RUN tar -xvzf julia-1.7.0-linux-x86_64.tar.gz
-RUN cp -r julia-1.7.0 /opt/
-RUN ln -s /opt/julia-1.7.0/bin/julia /usr/local/bin/julia
-RUN julia -e 'using Pkg;Pkg.add("IJulia")'
-
-### Copy example config.yaml for S3 duckdb connection
-COPY config.yaml ./config.yaml
+# COPY style.min.css /opt/venv/lib/python3.10/site-packages/notebook/static/style/style.min.css
 
 ### Copy DuckDB Example and Spark Example
-# COPY DuckDB_Eval.ipynb ./DuckDB_Eval.ipynb
-COPY spark_Eval.ipynb ./spark_Eval.ipynb
+COPY pyspark_examples.ipynb ./pyspark_examples.ipynb
 
 CMD ["jupyter", "lab", "--port=8888", "--no-browser", "--ip=0.0.0.0", "--allow-root", "--NotebookApp.token=''"]
 
