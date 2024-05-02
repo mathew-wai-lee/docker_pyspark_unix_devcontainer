@@ -86,7 +86,7 @@ WORKDIR /home/
 COPY --from=compile-image /opt/venv /opt/venv
 
 ### Change style of pyspark dataframes to pretty print
-# COPY style.min.css /opt/venv/lib/python3.10/site-packages/notebook/static/style/style.min.css
+COPY style.min.css /opt/venv/lib/python3.10/site-packages/notebook/static/style/style.min.css
 
 ### Copy DuckDB Example and Spark Example
 COPY pyspark_examples.ipynb ./pyspark_examples.ipynb
